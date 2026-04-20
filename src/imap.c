@@ -236,14 +236,14 @@ static void parse_from(const char *value, char *name, size_t name_size,
 // Fetch headers
 // ---------------------------------------------------------------------------
 
-int imap_fetch_headers(ImapConnection *conn, int count, MessageList *list) {
-    if (count <= 0) return 0;
+int imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *list) {
+    if (start <= 0 || end < start) return 0;
 
     int tag = conn->tag_counter++;
     char cmd[128];
     snprintf(cmd, sizeof(cmd),
-        "a%03d FETCH 1:%d (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])\r\n",
-        tag, count);
+        "a%03d FETCH %d:%d (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])\r\n",
+        tag, start, end);
 
     int ret = imap_send(conn, cmd);
     if (ret < 0) return ret;

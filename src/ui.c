@@ -7,23 +7,16 @@ WINDOW *win_reader;
 WINDOW *win_composer;
 WINDOW *win_status;
 
-// Color pairs
-#define COLOR_SELECTED   1   // highlighted row
-#define COLOR_UNREAD     2   // unread indicator
-#define COLOR_HEADER     3   // message header labels
-#define COLOR_STATUS     4   // status bar
-
 static void create_windows(void) {
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
 
-    int list_h   = rows / 2;
-    int reader_h = rows - list_h - 1;  // -1 for status bar
-
-    win_list     = newwin(list_h,   cols, 0,        0);
-    win_reader   = newwin(reader_h, cols, list_h,   0);
-    win_composer = newwin(rows - 2, cols - 4, 1, 2); // centered overlay
-    win_status   = newwin(1,        cols, rows - 1, 0);
+    // List and reader are both full-screen (minus status bar)
+    // Only one is shown at a time
+    win_list     = newwin(rows - 1, cols, 0, 0);
+    win_reader   = newwin(rows - 1, cols, 0, 0);
+    win_composer = newwin(rows - 3, cols - 4, 1, 2);
+    win_status   = newwin(1, cols, rows - 1, 0);
 
     keypad(win_list,     TRUE);
     keypad(win_reader,   TRUE);
@@ -47,10 +40,10 @@ static void ui_init(void) {
     if (has_colors()) {
         start_color();
         use_default_colors();
-        init_pair(COLOR_SELECTED, COLOR_BLACK,  COLOR_CYAN);
-        init_pair(COLOR_UNREAD,   COLOR_GREEN,  -1);
-        init_pair(COLOR_HEADER,   COLOR_CYAN,   -1);
-        init_pair(COLOR_STATUS,   COLOR_BLACK,  COLOR_WHITE);
+        init_pair(1, COLOR_BLACK, COLOR_CYAN);   // selected row
+        init_pair(2, COLOR_GREEN, -1);            // unread indicator
+        init_pair(3, COLOR_CYAN,  -1);            // header labels
+        init_pair(4, COLOR_BLACK, COLOR_WHITE);   // status bar
     }
 
     create_windows();
@@ -68,7 +61,6 @@ static void handle_resize(void) {
     create_windows();
 }
 
-// Open the selected message: fetch body, switch to reader
 static void open_selected(AppState *state) {
     MessageList *list = &state->message_list;
     if (list->count == 0) return;
@@ -78,7 +70,6 @@ static void open_selected(AppState *state) {
 
     uint32_t uid = list->headers[idx].uid;
 
-    // Free previous message if any
     if (state->current_message) {
         message_free(state->current_message);
         free(state->current_message);
@@ -127,7 +118,7 @@ static void handle_key_reader(int ch, AppState *state) {
         case 'k': case KEY_UP:
             if (ui->scroll_offset > 0) ui->scroll_offset--;
             break;
-        case 'q': case KEY_BACKSPACE:
+        case 27: // ESC
             ui->active_pane   = PANE_LIST;
             ui->scroll_offset = 0;
             break;
@@ -138,12 +129,8 @@ static void handle_key_reader(int ch, AppState *state) {
 }
 
 static void handle_key_composer(int ch, AppState *state) {
-    switch (ch) {
-        case 27: // Escape
-            state->ui_state.active_pane = PANE_LIST;
-            break;
-        // Further composer key handling in pane_composer.c
-    }
+    if (ch == 27) // ESC
+        state->ui_state.active_pane = PANE_LIST;
 }
 
 void ui_run(AppState *state) {
@@ -151,45 +138,41 @@ void ui_run(AppState *state) {
 
     int running = 1;
     while (running) {
-        // Draw all panes
-        draw_list(win_list, state);
-        draw_status(win_status, state);
-
-        if (state->ui_state.active_pane == PANE_READER ||
-            state->ui_state.active_pane == PANE_LIST) {
-            draw_reader(win_reader, state);
+        switch (state->ui_state.active_pane) {
+            case PANE_LIST:
+                draw_list(win_list, state);
+                draw_status(win_status, state);
+                doupdate();
+                break;
+            case PANE_READER:
+                draw_reader(win_reader, state);
+                draw_status(win_status, state);
+                doupdate();
+                break;
+            case PANE_COMPOSER:
+                draw_composer(win_composer, state);
+                draw_status(win_status, state);
+                doupdate();
+                break;
         }
 
-        if (state->ui_state.active_pane == PANE_COMPOSER) {
-            draw_composer(win_composer, state);
-        }
-
-        doupdate();
-
-        // Read key from the active window
         WINDOW *active_win = win_list;
         if (state->ui_state.active_pane == PANE_READER)   active_win = win_reader;
         if (state->ui_state.active_pane == PANE_COMPOSER) active_win = win_composer;
 
         int ch = wgetch(active_win);
 
-        switch (ch) {
-            case 'q':
-                if (state->ui_state.active_pane == PANE_LIST) {
-                    running = 0;
-                } else {
-                    handle_key_reader(ch, state);
-                }
-                break;
-            case KEY_RESIZE:
-                handle_resize();
-                break;
-            default:
-                switch (state->ui_state.active_pane) {
-                    case PANE_LIST:     handle_key_list(ch, state);     break;
-                    case PANE_READER:   handle_key_reader(ch, state);   break;
-                    case PANE_COMPOSER: handle_key_composer(ch, state); break;
-                }
+        if (ch == KEY_RESIZE) { handle_resize(); continue; }
+
+        if (ch == 'q' && state->ui_state.active_pane == PANE_LIST) {
+            running = 0;
+            continue;
+        }
+
+        switch (state->ui_state.active_pane) {
+            case PANE_LIST:     handle_key_list(ch, state);     break;
+            case PANE_READER:   handle_key_reader(ch, state);   break;
+            case PANE_COMPOSER: handle_key_composer(ch, state); break;
         }
     }
 

@@ -32,8 +32,8 @@ int  imap_select(ImapConnection *conn, const char *mailbox, int *out_exists);
 int  imap_list(ImapConnection *conn, char ***out_names, int *out_count);
 
 // Messages
-// Fetch headers for messages 1..count into list (appends)
-int  imap_fetch_headers(ImapConnection *conn, int count, MessageList *list);
+// Fetch headers for messages start..end (inclusive, 1-based seq nums) into list
+int  imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *list);
 
 // Fetch full RFC 2822 body for uid; caller must free *out
 int  imap_fetch_body(ImapConnection *conn, uint32_t uid, char **out, size_t *out_len);

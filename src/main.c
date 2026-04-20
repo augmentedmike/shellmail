@@ -44,15 +44,15 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "SELECT failed\n");
         return 1;
     }
-    fprintf(stdout, "INBOX: %d messages\n", exists);
-
-    // Fetch headers (up to 50)
+    // Fetch the most recent 50 headers and reverse to show newest first
     int fetch_count = exists < 50 ? exists : 50;
-    ret = imap_fetch_headers(&state->session.imap_conn, fetch_count, &state->message_list);
+    int start = exists - fetch_count + 1;
+    ret = imap_fetch_headers(&state->session.imap_conn, start, exists, &state->message_list);
     if (ret != 0) {
         fprintf(stderr, "FETCH headers failed\n");
         return 1;
     }
+    message_list_reverse(&state->message_list);
 
     ui_run(state);
 

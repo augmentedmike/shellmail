@@ -4,11 +4,20 @@ void draw_status(WINDOW *win, AppState *state) {
     werase(win);
     wbkgd(win, COLOR_PAIR(4));
 
-    const char *pane = "LIST";
-    if (state->ui_state.active_pane == PANE_READER)   pane = "READER";
-    if (state->ui_state.active_pane == PANE_COMPOSER) pane = "COMPOSE";
+    switch (state->ui_state.active_pane) {
+        case PANE_LIST:
+            mvwprintw(win, 0, 1,
+                "shellmail  |  j/k: navigate   Enter: open   c: compose   q: quit");
+            break;
+        case PANE_READER:
+            mvwprintw(win, 0, 1,
+                "shellmail  |  j/k: scroll   r: reply   Esc: back to list");
+            break;
+        case PANE_COMPOSER:
+            mvwprintw(win, 0, 1,
+                "shellmail  |  Ctrl+S: send   Esc: cancel");
+            break;
+    }
 
-    mvwprintw(win, 0, 1, "shellmail | %s | j/k:navigate  Enter:open  c:compose  q:quit",
-              pane);
     wnoutrefresh(win);
 }
