@@ -242,7 +242,7 @@ int imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *li
     int tag = conn->tag_counter++;
     char cmd[128];
     snprintf(cmd, sizeof(cmd),
-        "a%03d FETCH %d:%d (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])\r\n",
+        "a%03d FETCH %d:%d (UID FLAGS X-GM-THRID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])\r\n",
         tag, start, end);
 
     int ret = imap_send(conn, cmd);
@@ -274,6 +274,10 @@ int imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *li
         // Parse UID
         char *uid_p = strstr(p, "UID ");
         if (uid_p) h->uid = (uint32_t)atol(uid_p + 4);
+
+        // Parse X-GM-THRID
+        char *thrid_p = strstr(p, "X-GM-THRID ");
+        if (thrid_p) h->thread_id = (uint64_t)strtoull(thrid_p + 11, NULL, 10);
 
         // Parse FLAGS
         char *flags_p = strstr(p, "FLAGS (");

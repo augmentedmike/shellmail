@@ -13,7 +13,9 @@ typedef struct AppState{
     UIState ui_state;
     Session session;
     MessageList message_list;
-    Message *current_message;
+    ThreadList  thread_list;
+    Thread     *current_thread;   // points into thread_list, not owned
+    Message    *current_message;
 } AppState;
 
 extern _Atomic(AppState*) app_state;

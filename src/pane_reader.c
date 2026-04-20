@@ -1,23 +1,19 @@
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include "ui.h"
+#include "imap.h"
 
-// In a MIME multipart message, find the text/plain part body.
-// Falls back to stripping HTML tags if only text/html is found.
-// Returns a malloc'd string the caller must free.
+// Find text/plain body in a raw RFC 2822 or MIME message.
+// Returns a malloc'd string; caller must free.
 static char *extract_text(const char *raw) {
-    // Look for text/plain part
     const char *plain = strcasestr(raw, "content-type: text/plain");
     if (!plain) plain = strcasestr(raw, "content-type:text/plain");
 
     if (plain) {
-        // Skip past headers to the blank line
         const char *body = strstr(plain, "\r\n\r\n");
         if (!body) body = strstr(plain, "\n\n");
         if (body) {
             body += (body[1] == '\n') ? 2 : 4;
-            // Find end: next MIME boundary "--" or end of string
             const char *end = strstr(body, "\r\n--");
             if (!end) end = strstr(body, "\n--");
             size_t len = end ? (size_t)(end - body) : strlen(body);
@@ -27,7 +23,7 @@ static char *extract_text(const char *raw) {
         }
     }
 
-    // No plain text — strip HTML tags from the whole body
+    // Fall back: strip HTML tags from body
     const char *body = strstr(raw, "\r\n\r\n");
     if (!body) body = strstr(raw, "\n\n");
     body = body ? body + (body[1] == '\n' ? 2 : 4) : raw;
@@ -39,10 +35,9 @@ static char *extract_text(const char *raw) {
     size_t j = 0;
     int in_tag = 0;
     for (size_t i = 0; i < len; i++) {
-        if (body[i] == '<')      { in_tag = 1; continue; }
-        if (body[i] == '>')      { in_tag = 0; continue; }
-        if (in_tag)              continue;
-        // Collapse &nbsp; and similar
+        if (body[i] == '<')  { in_tag = 1; continue; }
+        if (body[i] == '>')  { in_tag = 0; continue; }
+        if (in_tag)          continue;
         if (body[i] == '&') {
             const char *semi = strchr(body + i, ';');
             if (semi && (semi - (body + i)) < 8) {
@@ -57,14 +52,27 @@ static char *extract_text(const char *raw) {
     return out;
 }
 
-static int index_lines(const char *text, const char **lines, int max_lines) {
+// ---------------------------------------------------------------------------
+// Line indexing across multiple message bodies
+// ---------------------------------------------------------------------------
+
+typedef struct Line {
+    const char *ptr;
+    int         len;
+    int         is_header; // 1 = message divider line
+} Line;
+
+static int collect_lines(Line *lines, int max,
+                          const char *text, int is_header) {
     int n = 0;
     const char *p = text;
-    while (*p && n < max_lines) {
-        lines[n++] = p;
-        const char *nl = strchr(p, '\n');
-        if (!nl) break;
-        p = nl + 1;
+    while (*p && n < max) {
+        const char *eol = strchr(p, '\n');
+        int len = eol ? (int)(eol - p) : (int)strlen(p);
+        if (len > 0 && p[len - 1] == '\r') len--;
+        lines[n++] = (Line){ p, len, is_header };
+        if (!eol) break;
+        p = eol + 1;
     }
     return n;
 }
@@ -75,69 +83,105 @@ void draw_reader(WINDOW *win, AppState *state) {
     int rows, cols;
     getmaxyx(win, rows, cols);
 
-    Message *msg = state->current_message;
+    Thread *thread = state->current_thread;
 
-    if (!msg || !msg->body.data) {
-        mvwprintw(win, rows / 2, (cols - 14) / 2, "No message open");
+    if (!thread) {
+        mvwprintw(win, rows / 2, (cols - 16) / 2, "No thread open");
         wnoutrefresh(win);
         return;
     }
 
-    MessageHeader *h = &msg->header;
-
-    // Title bar: subject
+    // Title bar
     wattron(win, COLOR_PAIR(3) | A_BOLD);
     mvwhline(win, 0, 0, ' ', cols);
-    mvwprintw(win, 0, 1, "%-*.*s", cols - 2, cols - 2, h->subject);
+    mvwprintw(win, 0, 1, "%-*.*s", cols - 2, cols - 2, thread->subject);
     wattroff(win, COLOR_PAIR(3) | A_BOLD);
 
-    // From
-    wattron(win, A_BOLD);
-    mvwprintw(win, 1, 1, "From: ");
-    wattroff(win, A_BOLD);
-    if (h->from_name[0])
-        wprintw(win, "%s <%s>", h->from_name, h->from_address);
-    else
-        wprintw(win, "%s", h->from_address);
+    // Build a flat line array from all messages in the thread.
+    // Fetch bodies on demand (cache in current_message array — simple: refetch each render).
+    // For simplicity we fetch all bodies and store them in a local array.
+    // This is called once when the thread is opened; we avoid re-fetching on scroll.
+    //
+    // We store fetched bodies in current_message: one per thread message.
+    // Lazily allocate current_message as an array of Message.
+    if (!state->current_message) {
+        state->current_message = calloc(thread->count, sizeof(Message));
+        if (!state->current_message) { wnoutrefresh(win); return; }
 
-    // Date
-    wattron(win, A_BOLD);
-    mvwprintw(win, 2, 1, "Date: ");
-    wattroff(win, A_BOLD);
-    wprintw(win, "%.*s", cols - 8, h->date);
+        for (size_t i = 0; i < thread->count; i++) {
+            Message *m = &state->current_message[i];
+            m->header = thread->headers[i];
+            char *body = NULL; size_t body_len = 0;
+            if (imap_fetch_body(&state->session.imap_conn,
+                                thread->headers[i].uid, &body, &body_len) == 0) {
+                m->body.data     = body;
+                m->body.data_len = body_len;
+            }
+        }
+    }
 
-    // Divider
-    wattron(win, COLOR_PAIR(3));
-    mvwhline(win, 3, 0, ACS_HLINE, cols);
-    wattroff(win, COLOR_PAIR(3));
+    // Collect all lines into a flat array
+    int max_lines = 32768;
+    Line *lines = malloc(max_lines * sizeof(Line));
+    if (!lines) { wnoutrefresh(win); return; }
 
-    // Extract plain text body
-    char *text = extract_text(msg->body.data);
-    if (!text) { wnoutrefresh(win); return; }
+    // Also keep extracted text buffers so pointers stay valid
+    char **texts = calloc(thread->count, sizeof(char *));
+    char **hdrs  = calloc(thread->count, sizeof(char *));
 
-    int body_start_row = 4;
-    int body_rows      = rows - body_start_row;
+    int total = 0;
+    for (size_t i = 0; i < thread->count && total < max_lines - 64; i++) {
+        Message *m = &state->current_message[i];
+        MessageHeader *h = &m->header;
 
-    const char **lines = malloc(8192 * sizeof(char *));
-    if (!lines) { free(text); wnoutrefresh(win); return; }
-    int total_lines = index_lines(text, lines, 8192);
+        // Divider: "From Name — Date"
+        char divider[256];
+        snprintf(divider, sizeof(divider), "── %s  %s ──",
+                 h->from_name[0] ? h->from_name : h->from_address,
+                 h->date);
+        hdrs[i] = strdup(divider);
+        total += collect_lines(lines + total, max_lines - total, hdrs[i], 1);
+
+        // Body
+        if (m->body.data) {
+            texts[i] = extract_text(m->body.data);
+            if (texts[i])
+                total += collect_lines(lines + total, max_lines - total, texts[i], 0);
+        }
+
+        // Blank separator between messages
+        if (i + 1 < thread->count && total < max_lines - 1)
+            lines[total++] = (Line){ "", 0, 0 };
+    }
+
+    // Render body area
+    int body_start = 1;
+    int body_rows  = rows - body_start;
 
     int scroll = state->ui_state.scroll_offset;
-    if (total_lines > body_rows && scroll > total_lines - body_rows)
-        scroll = total_lines - body_rows;
+    if (total > body_rows && scroll > total - body_rows) scroll = total - body_rows;
     if (scroll < 0) scroll = 0;
     state->ui_state.scroll_offset = scroll;
 
-    for (int i = 0; i < body_rows && (scroll + i) < total_lines; i++) {
-        const char *line = lines[scroll + i];
-        const char *eol  = strchr(line, '\n');
-        int len = eol ? (int)(eol - line) : (int)strlen(line);
-        if (len > 0 && line[len - 1] == '\r') len--;
-        if (len > cols - 1) len = cols - 1;
-        mvwprintw(win, body_start_row + i, 0, "%.*s", len, line);
+    for (int i = 0; i < body_rows && (scroll + i) < total; i++) {
+        Line *ln = &lines[scroll + i];
+        int len  = ln->len > cols - 1 ? cols - 1 : ln->len;
+        if (ln->is_header) {
+            wattron(win, COLOR_PAIR(3) | A_BOLD);
+            mvwprintw(win, body_start + i, 0, "%.*s", len, ln->ptr);
+            wattroff(win, COLOR_PAIR(3) | A_BOLD);
+        } else {
+            mvwprintw(win, body_start + i, 0, "%.*s", len, ln->ptr);
+        }
     }
 
+    for (size_t i = 0; i < thread->count; i++) {
+        free(texts[i]);
+        free(hdrs[i]);
+    }
+    free(texts);
+    free(hdrs);
     free(lines);
-    free(text);
+
     wnoutrefresh(win);
 }

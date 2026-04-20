@@ -62,35 +62,28 @@ static void handle_resize(void) {
 }
 
 static void open_selected(AppState *state) {
-    MessageList *list = &state->message_list;
-    if (list->count == 0) return;
+    ThreadList *tl = &state->thread_list;
+    if (tl->count == 0) return;
 
     int idx = state->ui_state.selected_index;
-    if (idx < 0 || (size_t)idx >= list->count) return;
+    if (idx < 0 || (size_t)idx >= tl->count) return;
 
-    uint32_t uid = list->headers[idx].uid;
-
-    if (state->current_message) {
-        message_free(state->current_message);
+    // Free previous fetched bodies
+    if (state->current_message && state->current_thread) {
+        for (size_t i = 0; i < state->current_thread->count; i++)
+            message_free(&state->current_message[i]);
         free(state->current_message);
-    }
-    state->current_message = calloc(1, sizeof(Message));
-
-    char *body = NULL;
-    size_t body_len = 0;
-    if (imap_fetch_body(&state->session.imap_conn, uid, &body, &body_len) == 0) {
-        state->current_message->body.data     = body;
-        state->current_message->body.data_len = body_len;
-        state->current_message->header        = list->headers[idx];
+        state->current_message = NULL;
     }
 
+    state->current_thread         = &tl->threads[idx];
     state->ui_state.active_pane   = PANE_READER;
     state->ui_state.scroll_offset = 0;
 }
 
 static void handle_key_list(int ch, AppState *state) {
     UIState *ui = &state->ui_state;
-    int max = (int)state->message_list.count - 1;
+    int max = (int)state->thread_list.count - 1;
 
     switch (ch) {
         case 'j': case KEY_DOWN:

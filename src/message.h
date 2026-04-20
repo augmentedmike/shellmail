@@ -22,8 +22,25 @@ typedef struct MessageHeader {
     uint32_t     uid;
     uint32_t     size;
     uint32_t     flags;
-     
+    uint64_t     thread_id;   // X-GM-THRID
 } MessageHeader;
+
+// A thread is a group of messages sharing the same thread_id.
+// Headers are stored oldest-first.
+typedef struct Thread {
+    uint64_t      thread_id;
+    char          subject[256];      // from earliest message
+    char          latest_date[64];   // from most recent message
+    char          participants[256]; // comma-separated unique from_names
+    uint32_t      flags;             // OR of all messages — unread if any unread
+    size_t        count;
+    MessageHeader *headers;          // owned, oldest-first
+} Thread;
+
+typedef struct ThreadList {
+    Thread *threads;
+    size_t  count;
+} ThreadList;
 
 typedef struct MessageAttachment {
     char         filename[256];
@@ -60,6 +77,9 @@ void message_list_init(MessageList *list);
 void message_list_free(MessageList *list);
 void message_list_reverse(MessageList *list);
 void message_free(Message *msg);
+
+void thread_list_build(const MessageList *src, ThreadList *out);
+void thread_list_free(ThreadList *list);
 
 
 
