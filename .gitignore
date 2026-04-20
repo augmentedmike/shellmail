@@ -4,3 +4,9 @@ build/
 
 # config with credentials
 config.yaml
+
+# editor/IDE
+.clangd
+.vscode/
+*.swp
+.DS_Store
