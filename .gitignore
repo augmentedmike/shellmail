@@ -1,0 +1,6 @@
+# build output
+shellmail
+src/*.o
+
+# config with credentials
+config.yaml

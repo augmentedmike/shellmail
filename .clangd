@@ -1,0 +1,4 @@
+CompileFlags:
+    Add:
+      - -I/opt/homebrew/opt/mbedtls/include
+      - -I/opt/homebrew/opt/ncurses/include  
