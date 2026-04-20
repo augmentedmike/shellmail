@@ -1,6 +1,6 @@
 #include <string.h>
-#include "ui.h"
-#include "message.h"
+#include "ui/ui.h"
+#include "core/message.h"
 
 void draw_list(WINDOW *win, AppState *state) {
     werase(win);

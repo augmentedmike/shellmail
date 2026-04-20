@@ -2,7 +2,7 @@
 #define ui_h
 
 #include <ncurses.h>
-#include "app_state.h"
+#include "core/app_state.h"
 
 // Windows — accessible to pane renderers
 extern WINDOW *win_list;

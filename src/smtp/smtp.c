@@ -3,7 +3,13 @@
 #include <string.h>
 #include <psa/crypto.h>
 #include <mbedtls/base64.h>
-#include "smtp.h"
+#include "smtp/smtp.h"
+
+// strchrnul is not available on macOS; provide a local replacement
+static const char *smtp_strchrnul(const char *s, int c) {
+    const char *p = strchr(s, c);
+    return p ? p : s + strlen(s);
+}
 
 // ---------------------------------------------------------------------------
 // Low-level I/O
@@ -151,8 +157,8 @@ int smtp_send(SmtpConnection *conn, const SmtpMessage *msg) {
     // Body — dot-stuff lines starting with "."
     const char *p = msg->body;
     while (*p) {
-        const char *eol = strchrnul(p, '\n');
-        size_t line_len = eol - p + (*eol ? 1 : 0);
+        const char *eol = smtp_strchrnul(p, '\n');
+        size_t line_len = (size_t)(eol - p) + (*eol ? 1 : 0);
         if (p[0] == '.') smtp_write(conn, ".");
         char line[1024];
         if (line_len >= sizeof(line)) line_len = sizeof(line) - 1;

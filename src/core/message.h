@@ -59,7 +59,7 @@ typedef struct MessageBody {
 
     MessageAttachment *attachments;
     size_t            attachment_count;
-    
+
 } MessageBody;
 
 typedef struct Message {

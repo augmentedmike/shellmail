@@ -1,7 +1,7 @@
 #ifndef session_h
 #define session_h
 
-#include "imap.h"
+#include "imap/imap.h"
 
 typedef enum {
     SESSION_STATE_DISCONNECTED,

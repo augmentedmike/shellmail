@@ -1,8 +1,8 @@
 
 CC = gcc
 
-CFLAGS =  -Wall -Wextra -O2
-LDFLAGS = -lmbedtls -lmbedx509 -lmbedcrypto -lncurses
+CFLAGS =  -Wall -Wextra -O2 -Isrc
+LDFLAGS = -lmbedtls -lmbedx509 -lmbedcrypto -lncurses -lsqlite3 -lpthread
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
@@ -12,20 +12,18 @@ ifeq ($(UNAME), Darwin)
 	LDFLAGS += -L$(MBEDTLS_PREFIX)/lib -L$(NCURSES_PREFIX)/lib
 endif
 
-SRCS = $(wildcard src/*.c)
+SRCS = $(shell find src -name '*.c')
 OBJS = $(patsubst src/%.c, build/%.o, $(SRCS))
 
 TARGET = shellmail
 
-all: build $(TARGET)
-
-build:
-	mkdir -p build
+all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 build/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:

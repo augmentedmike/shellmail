@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "imap.h"
+#include "imap/imap.h"
 
 // ---------------------------------------------------------------------------
 // Low-level I/O

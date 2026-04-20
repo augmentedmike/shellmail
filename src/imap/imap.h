@@ -5,7 +5,7 @@
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
-#include "message.h"
+#include "core/message.h"
 
 typedef struct ImapConnection {
     mbedtls_net_context net_ctx;

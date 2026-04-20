@@ -1,4 +1,4 @@
-#include "ui.h"
+#include "ui/ui.h"
 
 void draw_composer(WINDOW *win, AppState *state) {
     (void)state;

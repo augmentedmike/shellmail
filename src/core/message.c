@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include "message.h"
+#include "core/message.h"
 
 void message_list_init(MessageList *list) {
     list->headers = NULL;

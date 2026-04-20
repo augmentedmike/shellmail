@@ -1,4 +1,4 @@
-#include "app_state.h"
+#include "core/app_state.h"
 #include <string.h>
 
 AppState *appstate_init(void) {
@@ -12,6 +12,7 @@ AppState *appstate_init(void) {
     session_init(&state->session);
     message_list_init(&state->message_list);
     state->current_message = NULL;
+    state->cache = NULL;
+    state->sync  = NULL;
     return state;
 }
-

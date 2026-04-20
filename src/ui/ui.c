@@ -1,6 +1,9 @@
 #include <stdlib.h>
-#include "ui.h"
-#include "imap.h"
+#include "ui/ui.h"
+#include "imap/imap.h"
+#include "sync/sync.h"
+#include "cache/cache.h"
+#include "core/message.h"
 
 WINDOW *win_list;
 WINDOW *win_reader;
@@ -98,6 +101,9 @@ static void handle_key_list(int ch, AppState *state) {
         case 'c':
             ui->active_pane = PANE_COMPOSER;
             break;
+        case 'R':
+            if (state->sync) sync_request(state->sync);
+            break;
     }
 }
 
@@ -131,6 +137,25 @@ void ui_run(AppState *state) {
 
     int running = 1;
     while (running) {
+        // Check if background sync delivered new data
+        if (state->sync && sync_needs_reload(state->sync)) {
+            sync_clear_reload(state->sync);
+
+            // Free previous message if open
+            if (state->current_message && state->current_thread) {
+                for (size_t i = 0; i < state->current_thread->count; i++)
+                    message_free(&state->current_message[i]);
+                free(state->current_message);
+                state->current_message = NULL;
+                state->current_thread = NULL;
+            }
+
+            message_list_free(&state->message_list);
+            thread_list_free(&state->thread_list);
+            cache_load_headers(state->cache, &state->message_list);
+            thread_list_build(&state->message_list, &state->thread_list);
+        }
+
         switch (state->ui_state.active_pane) {
             case PANE_LIST:
                 draw_list(win_list, state);
@@ -153,9 +178,12 @@ void ui_run(AppState *state) {
         if (state->ui_state.active_pane == PANE_READER)   active_win = win_reader;
         if (state->ui_state.active_pane == PANE_COMPOSER) active_win = win_composer;
 
+        // Poll every 200ms so we can react to background sync
+        wtimeout(active_win, 200);
         int ch = wgetch(active_win);
 
         if (ch == KEY_RESIZE) { handle_resize(); continue; }
+        if (ch == ERR) continue; // timeout — loop back to check sync
 
         if (ch == 'q' && state->ui_state.active_pane == PANE_LIST) {
             running = 0;

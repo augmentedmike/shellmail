@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include "app_state.h"
+#include "core/app_state.h"
 
 Config load_config(struct AppState *state, const char *filename) {
     FILE *file = fopen(filename, "r");

@@ -1,7 +1,8 @@
 #include <string.h>
 #include <stdlib.h>
-#include "ui.h"
-#include "imap.h"
+#include "ui/ui.h"
+#include "imap/imap.h"
+#include "cache/cache.h"
 
 // Find text/plain body in a raw RFC 2822 or MIME message.
 // Returns a malloc'd string; caller must free.
@@ -98,11 +99,6 @@ void draw_reader(WINDOW *win, AppState *state) {
     wattroff(win, COLOR_PAIR(3) | A_BOLD);
 
     // Build a flat line array from all messages in the thread.
-    // Fetch bodies on demand (cache in current_message array — simple: refetch each render).
-    // For simplicity we fetch all bodies and store them in a local array.
-    // This is called once when the thread is opened; we avoid re-fetching on scroll.
-    //
-    // We store fetched bodies in current_message: one per thread message.
     // Lazily allocate current_message as an array of Message.
     if (!state->current_message) {
         state->current_message = calloc(thread->count, sizeof(Message));
@@ -111,9 +107,21 @@ void draw_reader(WINDOW *win, AppState *state) {
         for (size_t i = 0; i < thread->count; i++) {
             Message *m = &state->current_message[i];
             m->header = thread->headers[i];
-            char *body = NULL; size_t body_len = 0;
-            if (imap_fetch_body(&state->session.imap_conn,
-                                thread->headers[i].uid, &body, &body_len) == 0) {
+            uint32_t uid = thread->headers[i].uid;
+
+            char *body = NULL;
+            size_t body_len = 0;
+
+            // Check cache first; fall back to IMAP
+            if (state->cache && cache_has_body(state->cache, uid)) {
+                cache_load_body(state->cache, uid, &body, &body_len);
+            } else if (imap_fetch_body(&state->session.imap_conn,
+                                       uid, &body, &body_len) == 0) {
+                if (state->cache)
+                    cache_save_body(state->cache, uid, body, body_len);
+            }
+
+            if (body) {
                 m->body.data     = body;
                 m->body.data_len = body_len;
             }

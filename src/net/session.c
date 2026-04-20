@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <psa/crypto.h>
-#include "session.h"
+#include "net/session.h"
 
 void session_init(Session *session) {
     session->state = SESSION_STATE_DISCONNECTED;
