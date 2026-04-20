@@ -29,11 +29,39 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int ret = imap_login(&state->session.imap_conn, state->config.username, state->config.password);
+    int ret = imap_login(&state->session.imap_conn,
+                         state->config.username, state->config.password);
     if (ret != 0) {
         fprintf(stderr, "Login failed\n");
         return 1;
     }
 
+    // Select INBOX
+    int exists = 0;
+    ret = imap_select(&state->session.imap_conn, "INBOX", &exists);
+    if (ret != 0) {
+        fprintf(stderr, "SELECT failed\n");
+        return 1;
+    }
+    fprintf(stdout, "INBOX: %d messages\n", exists);
+
+    // Fetch headers (up to 50)
+    int fetch_count = exists < 50 ? exists : 50;
+    ret = imap_fetch_headers(&state->session.imap_conn, fetch_count, &state->message_list);
+    if (ret != 0) {
+        fprintf(stderr, "FETCH headers failed\n");
+        return 1;
+    }
+
+    for (size_t i = 0; i < state->message_list.count; i++) {
+        MessageHeader *h = &state->message_list.headers[i];
+        fprintf(stdout, "[%c] %-30s %-50s %s\n",
+                (h->flags & FLAG_SEEN) ? ' ' : '*',
+                h->from_name[0] ? h->from_name : h->from_address,
+                h->subject,
+                h->date);
+    }
+
+    imap_logout(&state->session.imap_conn);
     return 0;
 }

@@ -57,6 +57,8 @@ typedef struct MessageList {
 } MessageList;
 
 void message_list_init(MessageList *list);
+void message_list_free(MessageList *list);
+void message_free(Message *msg);
 
 
 

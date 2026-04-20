@@ -20,6 +20,10 @@ Config load_config(struct AppState *state, const char *filename) {
             strncpy(state->config.imap_server, value, sizeof(state->config.imap_server) - 1);
         } else if (strcmp(key, "port") == 0) {
             strncpy(state->config.imap_port, value, sizeof(state->config.imap_port) - 1);
+        } else if (strcmp(key, "smtp_server") == 0) {
+            strncpy(state->config.smtp_server, value, sizeof(state->config.smtp_server) - 1);
+        } else if (strcmp(key, "smtp_port") == 0) {
+            strncpy(state->config.smtp_port, value, sizeof(state->config.smtp_port) - 1);
         } else if (strcmp(key, "username") == 0) {
             strncpy(state->config.username, value, sizeof(state->config.username) - 1);
         } else if (strcmp(key, "password") == 0) {
