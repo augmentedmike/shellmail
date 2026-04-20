@@ -1,6 +1,6 @@
 # build output
 shellmail
-src/*.o
+build/
 
 # config with credentials
 config.yaml

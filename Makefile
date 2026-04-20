@@ -12,17 +12,21 @@ ifeq ($(UNAME), Darwin)
 	LDFLAGS += -L$(MBEDTLS_PREFIX)/lib -L$(NCURSES_PREFIX)/lib
 endif
 
-
 SRCS = $(wildcard src/*.c)
-OBJS = $(SRCS:.c=.o)
+OBJS = $(patsubst src/%.c, build/%.o, $(SRCS))
 
 TARGET = shellmail
 
-all: $(TARGET)
+all: build $(TARGET)
+
+build:
+	mkdir -p build
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-clean:
-	rm -f $(OBJS) $(TARGET)
+build/%.o: src/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
+clean:
+	rm -rf build $(TARGET)
