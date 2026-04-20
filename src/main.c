@@ -4,6 +4,7 @@
 #include "app_state.h"
 #include "config.h"
 #include "imap.h"
+#include "ui.h"
 
 int main(int argc, char *argv[]) {
     AppState *state = appstate_init();
@@ -53,14 +54,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    for (size_t i = 0; i < state->message_list.count; i++) {
-        MessageHeader *h = &state->message_list.headers[i];
-        fprintf(stdout, "[%c] %-30s %-50s %s\n",
-                (h->flags & FLAG_SEEN) ? ' ' : '*',
-                h->from_name[0] ? h->from_name : h->from_address,
-                h->subject,
-                h->date);
-    }
+    ui_run(state);
 
     imap_logout(&state->session.imap_conn);
     return 0;
