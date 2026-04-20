@@ -271,16 +271,26 @@ int imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *li
 
         MessageHeader *h = &headers[idx];
 
+        // Bound metadata parsing to this message's parenthesized section,
+        // ending at the literal marker '{' (before the header block data).
+        // This prevents fields from one message bleeding into the next.
+        char *meta_end = strchr(p, '{');
+        size_t meta_len = meta_end ? (size_t)(meta_end - p) : strlen(p);
+        char *meta = malloc(meta_len + 1);
+        if (!meta) { p++; continue; }
+        memcpy(meta, p, meta_len);
+        meta[meta_len] = '\0';
+
         // Parse UID
-        char *uid_p = strstr(p, "UID ");
+        char *uid_p = strstr(meta, "UID ");
         if (uid_p) h->uid = (uint32_t)atol(uid_p + 4);
 
         // Parse X-GM-THRID
-        char *thrid_p = strstr(p, "X-GM-THRID ");
+        char *thrid_p = strstr(meta, "X-GM-THRID ");
         if (thrid_p) h->thread_id = (uint64_t)strtoull(thrid_p + 11, NULL, 10);
 
         // Parse FLAGS
-        char *flags_p = strstr(p, "FLAGS (");
+        char *flags_p = strstr(meta, "FLAGS (");
         if (flags_p) {
             char *flags_end = strchr(flags_p, ')');
             if (flags_end) {
@@ -297,16 +307,17 @@ int imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *li
             }
         }
 
-        // Find the header block (after the literal size marker "{N}")
-        char *hdr_start = strchr(p, '{');
-        if (hdr_start) {
-            hdr_start = strchr(hdr_start, '\n');
+        free(meta);
+
+        // Parse email headers from the literal block (after "{N}\n")
+        if (meta_end) {
+            char *hdr_start = strchr(meta_end, '\n');
             if (hdr_start) {
                 hdr_start++;
                 char from_val[256] = {0};
-                parse_header_field(hdr_start, "From",    from_val,    sizeof(from_val));
-                parse_header_field(hdr_start, "Subject", h->subject,  sizeof(h->subject));
-                parse_header_field(hdr_start, "Date",    h->date,     sizeof(h->date));
+                parse_header_field(hdr_start, "From",    from_val,   sizeof(from_val));
+                parse_header_field(hdr_start, "Subject", h->subject, sizeof(h->subject));
+                parse_header_field(hdr_start, "Date",    h->date,    sizeof(h->date));
                 parse_from(from_val, h->from_name, sizeof(h->from_name),
                                      h->from_address, sizeof(h->from_address));
             }

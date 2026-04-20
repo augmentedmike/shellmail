@@ -35,10 +35,33 @@ void message_free(Message *msg) {
 // Threading
 // ---------------------------------------------------------------------------
 
+// Strip "Re:", "Fwd:", "FW:" prefixes and return pointer into s
+static const char *normalize_subject(const char *s) {
+    while (1) {
+        while (*s == ' ') s++;
+        if      (strncasecmp(s, "re:",  3) == 0) s += 3;
+        else if (strncasecmp(s, "fwd:", 4) == 0) s += 4;
+        else if (strncasecmp(s, "fw:",  3) == 0) s += 3;
+        else break;
+    }
+    while (*s == ' ') s++;
+    return s;
+}
+
 // Find thread by id in the growing array, return index or -1
 static int find_thread(ThreadList *tl, uint64_t tid) {
     for (size_t i = 0; i < tl->count; i++)
         if (tl->threads[i].thread_id == tid) return (int)i;
+    return -1;
+}
+
+// Find thread by normalized subject, return index or -1
+static int find_thread_by_subject(ThreadList *tl, const char *subject) {
+    const char *norm = normalize_subject(subject);
+    for (size_t i = 0; i < tl->count; i++) {
+        if (strcasecmp(normalize_subject(tl->threads[i].subject), norm) == 0)
+            return (int)i;
+    }
     return -1;
 }
 
@@ -78,7 +101,10 @@ void thread_list_build(const MessageList *src, ThreadList *out) {
     for (size_t i = 0; i < src->count; i++) {
         const MessageHeader *h = &src->headers[i];
 
-        int idx = find_thread(out, h->thread_id);
+        int idx = (h->thread_id != 0)
+            ? find_thread(out, h->thread_id)
+            : find_thread_by_subject(out, h->subject);
+
         if (idx < 0) {
             // New thread
             idx = (int)out->count++;
