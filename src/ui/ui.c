@@ -128,6 +128,19 @@ static void handle_key_list(int ch, AppState *state) {
             if (state->cache) cache_mark_all_seen(state->cache);
             reload_threads(state);
             break;
+        case 'A': {
+            if (state->view_count == 0) break;
+            Thread *t = state->view[ui->selected_index];
+            const char *dest = state->config.archive_mailbox;
+            imap_create_mailbox(&state->session.imap_conn, dest); // no-op if exists
+            for (size_t i = 0; i < t->count; i++) {
+                uint32_t uid = t->headers[i].uid;
+                imap_uid_move(&state->session.imap_conn, uid, dest);
+                if (state->cache) cache_update_folder(state->cache, uid, dest);
+            }
+            reload_threads(state);
+            break;
+        }
         case ':': {
             // Pre-fill command bar with filter suggestion
             if (state->view_count > 0 && ui->selected_index >= 0 &&

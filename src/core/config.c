@@ -28,10 +28,17 @@ Config load_config(struct AppState *state, const char *filename) {
             strncpy(state->config.username, value, sizeof(state->config.username) - 1);
         } else if (strcmp(key, "password") == 0) {
             strncpy(state->config.password, value, sizeof(state->config.password) - 1);
+        } else if (strcmp(key, "archive_mailbox") == 0) {
+            strncpy(state->config.archive_mailbox, value, sizeof(state->config.archive_mailbox) - 1);
         }
     }
 
     fclose(file);
+
+    // Default archive folder for Gmail; override in config with archive_mailbox:
+    if (!state->config.archive_mailbox[0])
+        strncpy(state->config.archive_mailbox, "[Gmail]/All Mail",
+                sizeof(state->config.archive_mailbox) - 1);
 
     return state->config;
 }

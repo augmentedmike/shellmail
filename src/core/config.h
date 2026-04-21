@@ -7,6 +7,7 @@ typedef struct Config {
     char smtp_port[6];
     char username[256];
     char password[128];
+    char archive_mailbox[256];  // defaults to [Gmail]/All Mail
 } Config;
 
 struct AppState;

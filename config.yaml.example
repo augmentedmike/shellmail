@@ -4,3 +4,4 @@ smtp_server: smtp.gmail.com
 smtp_port: 465
 username: you@gmail.com
 password: your-app-password
+# archive_mailbox: [Gmail]/All Mail   # default; change for non-Gmail servers
