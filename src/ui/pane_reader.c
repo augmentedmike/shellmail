@@ -3,12 +3,13 @@
 #include "ui/ui.h"
 #include "imap/imap.h"
 #include "cache/cache.h"
+#include "compat/compat.h"
 
 // Find text/plain body in a raw RFC 2822 or MIME message.
 // Returns a malloc'd string; caller must free.
 static char *extract_text(const char *raw) {
-    const char *plain = strcasestr(raw, "content-type: text/plain");
-    if (!plain) plain = strcasestr(raw, "content-type:text/plain");
+    const char *plain = compat_strcasestr(raw, "content-type: text/plain");
+    if (!plain) plain = compat_strcasestr(raw, "content-type:text/plain");
 
     if (plain) {
         const char *body = strstr(plain, "\r\n\r\n");

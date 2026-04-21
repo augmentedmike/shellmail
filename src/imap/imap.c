@@ -5,6 +5,7 @@
 #include <mbedtls/base64.h>
 #include "imap/imap.h"
 #include "cache/cache.h"
+#include "compat/compat.h"
 
 // ---------------------------------------------------------------------------
 // Low-level I/O
@@ -336,7 +337,7 @@ static void parse_header_field(const char *headers, const char *field,
                                 char *out, size_t out_size) {
     char search[64];
     snprintf(search, sizeof(search), "\r\n%s:", field);
-    const char *p = strcasestr(headers, search);
+    const char *p = compat_strcasestr(headers, search);
     if (!p) {
         // Try at start of string
         char search2[64];
@@ -439,10 +440,10 @@ int imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *li
         if (thrid_p) h->thread_id = (uint64_t)strtoull(thrid_p + 11, NULL, 10);
 
         // Parse FLAGS
-        char *flags_p = strstr(meta, "FLAGS (");
-        if (!flags_p) flags_p = strcasestr(meta, "FLAGS (");
+        const char *flags_p = strstr(meta, "FLAGS (");
+        if (!flags_p) flags_p = compat_strcasestr(meta, "FLAGS (");
         if (flags_p) {
-            char *flags_end = strchr(flags_p + 7, ')');
+            const char *flags_end = strchr(flags_p + 7, ')');
             if (flags_end)
                 h->flags = parse_imap_flags(flags_p + 7,
                                             (size_t)(flags_end - (flags_p + 7)));
@@ -569,10 +570,10 @@ int imap_sync_flags(ImapConnection *conn, Cache *c) {
         char *uid_p = strstr(block, "UID ");
         if (uid_p) uid = (uint32_t)atol(uid_p + 4);
 
-        char *flags_p = strstr(block, "FLAGS (");
-        if (!flags_p) flags_p = strcasestr(block, "FLAGS (");
+        const char *flags_p = strstr(block, "FLAGS (");
+        if (!flags_p) flags_p = compat_strcasestr(block, "FLAGS (");
         if (flags_p) {
-            char *flags_end = strchr(flags_p + 7, ')');
+            const char *flags_end = strchr(flags_p + 7, ')');
             if (flags_end) {
                 flags_found = 1;
                 flags = parse_imap_flags(flags_p + 7,
