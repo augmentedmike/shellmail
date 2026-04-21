@@ -1,5 +1,4 @@
-#ifndef ui_h
-#define ui_h
+#pragma once
 
 #include <ncurses.h>
 #include "core/app_state.h"
@@ -20,7 +19,9 @@ void draw_composer(WINDOW *win, AppState *state);
 void draw_status(WINDOW *win, AppState *state);
 void draw_command(WINDOW *win, AppState *state);
 
+// Reload thread list from cache (shared by ui.c and pane_command.c)
+void reload_threads(AppState *state);
+
 // Command-mode handler; returns 1 if command was executed
 int  handle_key_command(int ch, AppState *state);
 
-#endif /* ui_h */

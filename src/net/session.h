@@ -1,5 +1,4 @@
-#ifndef session_h
-#define session_h
+#pragma once
 
 #include "imap/imap.h"
 
@@ -35,4 +34,3 @@ void session_init(Session *session);
 void session_connect(Session *session, const char *server, const char *port);
 
 
-#endif /* session_h */

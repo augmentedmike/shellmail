@@ -64,7 +64,7 @@ static void handle_resize(void) {
     create_windows();
 }
 
-static void reload_threads(AppState *state) {
+void reload_threads(AppState *state) {
     if (state->current_message && state->current_thread) {
         for (size_t i = 0; i < state->current_thread->count; i++)
             message_free(&state->current_message[i]);

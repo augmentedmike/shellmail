@@ -1,5 +1,4 @@
-#ifndef message_h
-#define message_h
+#pragma once
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -84,4 +83,3 @@ void thread_list_free(ThreadList *list);
 
 
 
-#endif /* message_h */

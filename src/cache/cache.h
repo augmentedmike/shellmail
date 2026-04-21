@@ -1,5 +1,4 @@
-#ifndef cache_h
-#define cache_h
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -38,4 +37,3 @@ int    cache_load_filters(Cache *c, Filter **out, size_t *count);
 int    cache_get_matching_uids(Cache *c, const char *field, const char *pattern,
                                 uint32_t **out, size_t *out_count);
 
-#endif

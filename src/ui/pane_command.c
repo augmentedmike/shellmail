@@ -2,8 +2,6 @@
 #include <string.h>
 #include <ctype.h>
 #include "ui/ui.h"
-#include "core/app_state.h"
-#include "core/message.h"
 #include "cache/cache.h"
 #include "imap/imap.h"
 
@@ -94,21 +92,7 @@ static void execute_command(AppState *state) {
     }
     free(uids);
 
-    // Reload thread list from cache
-    if (state->current_message && state->current_thread) {
-        for (size_t i = 0; i < state->current_thread->count; i++)
-            message_free(&state->current_message[i]);
-        free(state->current_message);
-        state->current_message = NULL;
-        state->current_thread  = NULL;
-    }
-    message_list_free(&state->message_list);
-    thread_list_free(&state->thread_list);
-    if (state->cache) {
-        cache_load_headers(state->cache, &state->message_list);
-        thread_list_build(&state->message_list, &state->thread_list);
-    }
-    appstate_rebuild_view(state);
+    reload_threads(state);
 }
 
 // ---------------------------------------------------------------------------

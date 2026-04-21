@@ -1,5 +1,4 @@
-#ifndef smtp_h
-#define smtp_h
+#pragma once
 
 #include <stddef.h>
 #include <mbedtls/net_sockets.h>
@@ -25,4 +24,3 @@ int smtp_login(SmtpConnection *conn, const char *username, const char *password)
 int smtp_send(SmtpConnection *conn, const SmtpMessage *msg);
 void smtp_disconnect(SmtpConnection *conn);
 
-#endif /* smtp_h */

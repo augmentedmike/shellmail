@@ -1,6 +1,4 @@
-#ifndef config_h
-#define config_h
-
+#pragma once
 
 typedef struct Config {
     char imap_server[256];
@@ -14,4 +12,3 @@ typedef struct Config {
 struct AppState;
 Config load_config(struct AppState *state, const char *filename);
 
-#endif /* config_h */

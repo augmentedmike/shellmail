@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <psa/crypto.h>
 #include <mbedtls/base64.h>
 #include "imap/imap.h"
 #include "cache/cache.h"
 #include "compat/compat.h"
+#include "net/tls.h"
 
 // ---------------------------------------------------------------------------
 // Low-level I/O
@@ -79,6 +81,40 @@ int imap_recv_response(ImapConnection *conn, int tag, char **out, size_t *out_le
 }
 
 // ---------------------------------------------------------------------------
+// TLS connect / disconnect (shared with sync.c and session.c)
+// ---------------------------------------------------------------------------
+
+int imap_tls_connect(ImapConnection *conn, const char *server, const char *port) {
+    psa_crypto_init();
+    mbedtls_x509_crt_init(&conn->crt);
+    conn->tag_counter = 0;
+
+    int ret = tls_connect(&conn->net_ctx, &conn->ssl_ctx, &conn->ssl_conf, server, port);
+    if (ret != 0) return ret;
+
+    char greeting[512];
+    int n = imap_recv(conn, greeting, sizeof(greeting));
+    return (n < 0) ? n : 0;
+}
+
+void imap_tls_disconnect(ImapConnection *conn) {
+    tls_disconnect(&conn->net_ctx, &conn->ssl_ctx, &conn->ssl_conf, &conn->crt);
+}
+
+// ---------------------------------------------------------------------------
+// Simple command helper — sends a pre-formatted tagged command and discards
+// the response. Used by functions that don't need to parse the server reply.
+// ---------------------------------------------------------------------------
+
+static int imap_exec(ImapConnection *conn, int tag, const char *cmd) {
+    if (imap_send(conn, cmd) < 0) return -1;
+    char *resp = NULL;
+    int ret = imap_recv_response(conn, tag, &resp, NULL);
+    free(resp);
+    return ret;
+}
+
+// ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 
@@ -86,28 +122,14 @@ int imap_login(ImapConnection *conn, const char *username, const char *password)
     int tag = conn->tag_counter++;
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "a%03d LOGIN %s \"%s\"\r\n", tag, username, password);
-
-    int ret = imap_send(conn, cmd);
-    if (ret < 0) return ret;
-
-    char *resp = NULL;
-    ret = imap_recv_response(conn, tag, &resp, NULL);
-    free(resp);
-    return ret;
+    return imap_exec(conn, tag, cmd);
 }
 
 int imap_logout(ImapConnection *conn) {
     int tag = conn->tag_counter++;
     char cmd[64];
     snprintf(cmd, sizeof(cmd), "a%03d LOGOUT\r\n", tag);
-
-    int ret = imap_send(conn, cmd);
-    if (ret < 0) return ret;
-
-    char *resp = NULL;
-    ret = imap_recv_response(conn, tag, &resp, NULL);
-    free(resp);
-    return ret;
+    return imap_exec(conn, tag, cmd);
 }
 
 // ---------------------------------------------------------------------------
@@ -621,44 +643,25 @@ int imap_create_mailbox(ImapConnection *conn, const char *name) {
     int tag = conn->tag_counter++;
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "a%03d CREATE \"%s\"\r\n", tag, name);
-    if (imap_send(conn, cmd) < 0) return -1;
-    char *resp = NULL;
-    int ret = imap_recv_response(conn, tag, &resp, NULL);
-    free(resp);
-    return ret; // -1 if already exists — caller ignores this
+    return imap_exec(conn, tag, cmd); // -1 if already exists — caller ignores
 }
 
 // Move a message: UID COPY to dest, mark \Deleted, EXPUNGE.
 int imap_uid_move(ImapConnection *conn, uint32_t uid, const char *dest) {
     char cmd[512];
-    char *resp = NULL;
-    int tag, ret;
+    int tag;
 
-    // UID COPY
     tag = conn->tag_counter++;
     snprintf(cmd, sizeof(cmd), "a%03d UID COPY %u \"%s\"\r\n", tag, uid, dest);
-    if (imap_send(conn, cmd) < 0) return -1;
-    ret = imap_recv_response(conn, tag, &resp, NULL);
-    free(resp);
-    if (ret != 0) return -1;
+    if (imap_exec(conn, tag, cmd) != 0) return -1;
 
-    // UID STORE +FLAGS (\Deleted)
     tag = conn->tag_counter++;
     snprintf(cmd, sizeof(cmd), "a%03d UID STORE %u +FLAGS (\\Deleted)\r\n", tag, uid);
-    if (imap_send(conn, cmd) < 0) return -1;
-    resp = NULL;
-    ret = imap_recv_response(conn, tag, &resp, NULL);
-    free(resp);
-    if (ret != 0) return -1;
+    if (imap_exec(conn, tag, cmd) != 0) return -1;
 
-    // EXPUNGE
     tag = conn->tag_counter++;
     snprintf(cmd, sizeof(cmd), "a%03d EXPUNGE\r\n", tag);
-    if (imap_send(conn, cmd) < 0) return -1;
-    resp = NULL;
-    ret = imap_recv_response(conn, tag, &resp, NULL);
-    free(resp);
-    return ret;
+    return imap_exec(conn, tag, cmd);
 }
 
 // Mark every message in the currently selected mailbox as \Seen
@@ -666,9 +669,5 @@ int imap_mark_all_seen(ImapConnection *conn) {
     int tag = conn->tag_counter++;
     char cmd[64];
     snprintf(cmd, sizeof(cmd), "a%03d STORE 1:* +FLAGS.SILENT (\\Seen)\r\n", tag);
-    if (imap_send(conn, cmd) < 0) return -1;
-    char *resp = NULL;
-    int ret = imap_recv_response(conn, tag, &resp, NULL);
-    free(resp);
-    return ret;
+    return imap_exec(conn, tag, cmd);
 }

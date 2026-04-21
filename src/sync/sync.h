@@ -1,5 +1,4 @@
-#ifndef sync_h
-#define sync_h
+#pragma once
 
 #include <stdatomic.h>
 
@@ -22,4 +21,3 @@ int          sync_needs_reload(SyncContext *ctx); // 1 if new data available
 void         sync_clear_reload(SyncContext *ctx);
 void         sync_destroy(SyncContext *ctx);
 
-#endif

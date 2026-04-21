@@ -4,6 +4,7 @@
 #include <psa/crypto.h>
 #include <mbedtls/base64.h>
 #include "smtp/smtp.h"
+#include "net/tls.h"
 
 // strchrnul is not available on macOS; provide a local replacement
 static const char *smtp_strchrnul(const char *s, int c) {
@@ -75,34 +76,11 @@ static char *base64_encode(const char *input) {
 
 int smtp_connect(SmtpConnection *conn, const char *server, const char *port) {
     psa_crypto_init();
-
-    mbedtls_net_init(&conn->net_ctx);
-    mbedtls_ssl_init(&conn->ssl_ctx);
-    mbedtls_ssl_config_init(&conn->ssl_conf);
     mbedtls_x509_crt_init(&conn->crt);
 
-    int ret = mbedtls_net_connect(&conn->net_ctx, server, port, MBEDTLS_NET_PROTO_TCP);
+    int ret = tls_connect(&conn->net_ctx, &conn->ssl_ctx, &conn->ssl_conf, server, port);
     if (ret != 0) return ret;
 
-    ret = mbedtls_ssl_config_defaults(&conn->ssl_conf,
-                                      MBEDTLS_SSL_IS_CLIENT,
-                                      MBEDTLS_SSL_TRANSPORT_STREAM,
-                                      MBEDTLS_SSL_PRESET_DEFAULT);
-    if (ret != 0) return ret;
-
-    mbedtls_ssl_conf_authmode(&conn->ssl_conf, MBEDTLS_SSL_VERIFY_NONE);
-
-    ret = mbedtls_ssl_setup(&conn->ssl_ctx, &conn->ssl_conf);
-    if (ret != 0) return ret;
-
-    mbedtls_ssl_set_hostname(&conn->ssl_ctx, server);
-    mbedtls_ssl_set_bio(&conn->ssl_ctx, &conn->net_ctx,
-                        mbedtls_net_send, mbedtls_net_recv, NULL);
-
-    ret = mbedtls_ssl_handshake(&conn->ssl_ctx);
-    if (ret != 0) return ret;
-
-    // Read greeting (220)
     return smtp_read_response(conn, 220);
 }
 

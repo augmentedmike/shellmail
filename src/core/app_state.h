@@ -1,5 +1,4 @@
-#ifndef app_state_h
-#define app_state_h
+#pragma once
 
 #include <stdatomic.h>
 
@@ -31,4 +30,3 @@ extern _Atomic(AppState*) app_state;
 
 AppState *appstate_init(void);
 void      appstate_rebuild_view(AppState *state);
-#endif /* app_state_h */

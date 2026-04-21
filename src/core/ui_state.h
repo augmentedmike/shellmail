@@ -1,5 +1,4 @@
-#ifndef ui_state_h
-#define ui_state_h
+#pragma once
 
 typedef enum ActivePane {
     PANE_LIST,
@@ -19,4 +18,3 @@ typedef struct UIState {
 
 void ui_state_init(UIState *ui_state);
 
-#endif /* ui_state_h */

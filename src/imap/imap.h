@@ -1,5 +1,4 @@
-#ifndef imap_connection_h
-#define imap_connection_h
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -20,6 +19,10 @@ typedef struct ImapConnection {
 
     int tag_counter;
 } ImapConnection;
+
+// TLS connect / disconnect (also used by sync.c and session.c)
+int  imap_tls_connect(ImapConnection *conn, const char *server, const char *port);
+void imap_tls_disconnect(ImapConnection *conn);
 
 // Low-level send/recv
 int  imap_send(ImapConnection *conn, const char *buf);
@@ -52,4 +55,3 @@ int  imap_sync_flags(ImapConnection *conn, Cache *c);
 // Fetch full RFC 2822 body for uid; caller must free *out
 int  imap_fetch_body(ImapConnection *conn, uint32_t uid, char **out, size_t *out_len);
 
-#endif
