@@ -21,9 +21,14 @@ typedef struct AppState {
     Message     *current_message;
     struct Cache       *cache;
     struct SyncContext *sync;
+
+    // Filtered view of thread_list (non-owning pointers)
+    Thread     **view;
+    size_t       view_count;
 } AppState;
 
 extern _Atomic(AppState*) app_state;
 
 AppState *appstate_init(void);
+void      appstate_rebuild_view(AppState *state);
 #endif /* app_state_h */

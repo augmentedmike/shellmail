@@ -8,9 +8,10 @@ void draw_list(WINDOW *win, AppState *state) {
     int rows, cols;
     getmaxyx(win, rows, cols);
 
-    ThreadList *tl   = &state->thread_list;
-    int selected     = state->ui_state.selected_index;
-    int content_rows = rows - 1;
+    size_t   view_count = state->view_count;
+    Thread **view       = state->view;
+    int      selected   = state->ui_state.selected_index;
+    int      content_rows = rows - 1;
 
     // Keep selected visible
     int scroll = 0;
@@ -19,18 +20,21 @@ void draw_list(WINDOW *win, AppState *state) {
     // Title bar
     wattron(win, COLOR_PAIR(3) | A_BOLD);
     mvwhline(win, 0, 0, ' ', cols);
-    mvwprintw(win, 0, 1, "INBOX  %zu threads", tl->count);
+    if (state->ui_state.hide_seen)
+        mvwprintw(win, 0, 1, "INBOX  %zu threads  [H: unread only]", view_count);
+    else
+        mvwprintw(win, 0, 1, "INBOX  %zu threads  [H: hide seen]", view_count);
     wattroff(win, COLOR_PAIR(3) | A_BOLD);
 
     // Column widths
-    int count_w   = 4;   // " (3)"
+    int count_w   = 4;
     int date_w    = 17;
     int from_w    = 26;
     int subject_w = cols - from_w - date_w - count_w - 4;
 
-    for (int i = 0; i < content_rows && (scroll + i) < (int)tl->count; i++) {
-        int idx = scroll + i;
-        Thread *t = &tl->threads[idx];
+    for (int i = 0; i < content_rows && (scroll + i) < (int)view_count; i++) {
+        int idx   = scroll + i;
+        Thread *t = view[idx];
         int row   = i + 1;
 
         int is_selected = (idx == selected);
@@ -53,7 +57,7 @@ void draw_list(WINDOW *win, AppState *state) {
         // Participants
         mvwprintw(win, row, 2, "%-*.*s", from_w, from_w, t->participants);
 
-        // Message count badge (if > 1)
+        // Message count badge
         char badge[8] = "";
         if (t->count > 1) snprintf(badge, sizeof(badge), "(%zu)", t->count);
         mvwprintw(win, row, 2 + from_w + 1, "%-*s", count_w, badge);

@@ -17,6 +17,10 @@ void ui_run(AppState *state);
 void draw_list(WINDOW *win, AppState *state);
 void draw_reader(WINDOW *win, AppState *state);
 void draw_composer(WINDOW *win, AppState *state);
-void draw_status(WINDOW *win, AppState *state);  // pane_status.c
+void draw_status(WINDOW *win, AppState *state);
+void draw_command(WINDOW *win, AppState *state);
+
+// Command-mode handler; returns 1 if command was executed
+int  handle_key_command(int ch, AppState *state);
 
 #endif /* ui_h */

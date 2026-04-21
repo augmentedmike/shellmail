@@ -78,13 +78,13 @@ static void add_participant(char *buf, size_t buf_size, const char *name) {
     strncat(buf, name, buf_size - strlen(buf) - 1);
 }
 
-// Compare threads by latest_date descending (for qsort)
+// Compare threads by max_uid descending (UIDs are monotonically increasing)
 static int cmp_thread_desc(const void *a, const void *b) {
     const Thread *ta = (const Thread *)a;
     const Thread *tb = (const Thread *)b;
-    // Simple lexicographic compare on the date string works reasonably
-    // for RFC 2822 dates with consistent timezone formatting
-    return strcmp(tb->latest_date, ta->latest_date);
+    if (tb->max_uid > ta->max_uid) return  1;
+    if (tb->max_uid < ta->max_uid) return -1;
+    return 0;
 }
 
 void thread_list_build(const MessageList *src, ThreadList *out) {
@@ -129,6 +129,9 @@ void thread_list_build(const MessageList *src, ThreadList *out) {
 
         // Accumulate flags
         t->flags |= h->flags;
+
+        // Track highest UID for sort order
+        if (h->uid > t->max_uid) t->max_uid = h->uid;
 
         // Add to participants
         const char *name = h->from_name[0] ? h->from_name : h->from_address;

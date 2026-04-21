@@ -33,6 +33,7 @@ typedef struct Thread {
     char          latest_date[64];   // from most recent message
     char          participants[256]; // comma-separated unique from_names
     uint32_t      flags;             // OR of all messages — unread if any unread
+    uint32_t      max_uid;           // highest UID in thread — sort key
     size_t        count;
     MessageHeader *headers;          // owned, oldest-first
 } Thread;

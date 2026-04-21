@@ -145,6 +145,10 @@ static void *sync_worker(void *arg) {
 
         message_list_free(&new_msgs);
 
+        // Refresh flags for all cached messages (catches seen/answered changes)
+        imap_sync_flags(&conn, state->cache);
+        atomic_store(&ctx->needs_reload, 1);
+
         // --- Disconnect ---
         imap_logout(&conn);
         sync_tls_disconnect(&conn);

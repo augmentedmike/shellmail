@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -36,13 +37,20 @@ Cache *cache_open(const char *path) {
         "    from_name  TEXT    NOT NULL DEFAULT '',"
         "    from_addr  TEXT    NOT NULL DEFAULT '',"
         "    body       BLOB,"
-        "    fetched_at INTEGER"
+        "    fetched_at INTEGER,"
+        "    folder     TEXT    NOT NULL DEFAULT 'INBOX'"
         ");"
         "CREATE INDEX IF NOT EXISTS idx_thread ON messages(thread_id);"
         "CREATE INDEX IF NOT EXISTS idx_date   ON messages(date DESC);"
         "CREATE TABLE IF NOT EXISTS meta ("
         "    key   TEXT PRIMARY KEY,"
         "    value TEXT NOT NULL"
+        ");"
+        "CREATE TABLE IF NOT EXISTS filters ("
+        "    id      INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "    field   TEXT NOT NULL,"
+        "    pattern TEXT NOT NULL,"
+        "    folder  TEXT NOT NULL"
         ");";
 
     if (cache_exec(c->db, schema) != SQLITE_OK) {
@@ -50,6 +58,11 @@ Cache *cache_open(const char *path) {
         free(c);
         return NULL;
     }
+
+    // Migrate existing DBs: add folder column if missing (error ignored)
+    sqlite3_exec(c->db,
+        "ALTER TABLE messages ADD COLUMN folder TEXT NOT NULL DEFAULT 'INBOX'",
+        NULL, NULL, NULL);
 
     return c;
 }
@@ -120,7 +133,7 @@ int cache_save_headers(Cache *c, const MessageList *list) {
 int cache_load_headers(Cache *c, MessageList *out) {
     const char *sql =
         "SELECT uid, thread_id, flags, date, subject, from_name, from_addr"
-        " FROM messages ORDER BY date DESC";
+        " FROM messages WHERE folder='INBOX' ORDER BY date DESC";
 
     sqlite3_stmt *stmt = NULL;
     if (sqlite3_prepare_v2(c->db, sql, -1, &stmt, NULL) != SQLITE_OK)
@@ -215,6 +228,31 @@ int cache_load_body(Cache *c, uint32_t uid, char **out, size_t *out_len) {
     return 0;
 }
 
+int cache_bulk_update_flags(Cache *c, const uint32_t *uids,
+                             const uint32_t *flags_arr, size_t count) {
+    if (!count) return 0;
+    const char *sql = "UPDATE messages SET flags=? WHERE uid=?";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(c->db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
+
+    sqlite3_exec(c->db, "BEGIN", NULL, NULL, NULL);
+    for (size_t i = 0; i < count; i++) {
+        sqlite3_bind_int64(stmt, 1, (sqlite3_int64)flags_arr[i]);
+        sqlite3_bind_int64(stmt, 2, (sqlite3_int64)uids[i]);
+        sqlite3_step(stmt);
+        sqlite3_reset(stmt);
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_exec(c->db, "COMMIT", NULL, NULL, NULL);
+    return 0;
+}
+
+int cache_mark_all_seen(Cache *c) {
+    return cache_exec(c->db,
+        "UPDATE messages SET flags = flags | 1 WHERE folder='INBOX'");
+}
+
 int cache_update_flags(Cache *c, uint32_t uid, uint32_t flags) {
     const char *sql = "UPDATE messages SET flags=? WHERE uid=?";
     sqlite3_stmt *stmt = NULL;
@@ -225,4 +263,104 @@ int cache_update_flags(Cache *c, uint32_t uid, uint32_t flags) {
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     return (rc == SQLITE_DONE) ? 0 : -1;
+}
+
+int cache_update_folder(Cache *c, uint32_t uid, const char *folder) {
+    const char *sql = "UPDATE messages SET folder=? WHERE uid=?";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(c->db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
+    sqlite3_bind_text(stmt,  1, folder, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 2, (sqlite3_int64)uid);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? 0 : -1;
+}
+
+int cache_save_filter(Cache *c, const char *field, const char *pattern, const char *folder) {
+    const char *sql =
+        "INSERT INTO filters(field, pattern, folder) VALUES(?, ?, ?)";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(c->db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
+    sqlite3_bind_text(stmt, 1, field,   -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, pattern, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, folder,  -1, SQLITE_STATIC);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? 0 : -1;
+}
+
+int cache_load_filters(Cache *c, Filter **out, size_t *count) {
+    const char *sql = "SELECT id, field, pattern, folder FROM filters";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(c->db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
+
+    size_t cap = 16, n = 0;
+    Filter *filters = malloc(cap * sizeof(Filter));
+    if (!filters) { sqlite3_finalize(stmt); return -1; }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (n >= cap) {
+            cap *= 2;
+            Filter *tmp = realloc(filters, cap * sizeof(Filter));
+            if (!tmp) { free(filters); sqlite3_finalize(stmt); return -1; }
+            filters = tmp;
+        }
+        Filter *f = &filters[n++];
+        f->id = sqlite3_column_int(stmt, 0);
+        const char *field   = (const char *)sqlite3_column_text(stmt, 1);
+        const char *pattern = (const char *)sqlite3_column_text(stmt, 2);
+        const char *folder  = (const char *)sqlite3_column_text(stmt, 3);
+        strncpy(f->field,   field   ? field   : "", sizeof(f->field)   - 1);
+        strncpy(f->pattern, pattern ? pattern : "", sizeof(f->pattern) - 1);
+        strncpy(f->folder,  folder  ? folder  : "", sizeof(f->folder)  - 1);
+    }
+    sqlite3_finalize(stmt);
+    *out   = filters;
+    *count = n;
+    return 0;
+}
+
+int cache_get_matching_uids(Cache *c, const char *field, const char *pattern,
+                             uint32_t **out, size_t *out_count) {
+    // Build LIKE pattern: %pattern%
+    char like_pat[260];
+    snprintf(like_pat, sizeof(like_pat), "%%%s%%", pattern);
+
+    const char *sql;
+    if (strcmp(field, "from") == 0) {
+        sql = "SELECT uid FROM messages WHERE folder='INBOX'"
+              " AND (from_addr LIKE ? OR from_name LIKE ?)";
+    } else {
+        sql = "SELECT uid FROM messages WHERE folder='INBOX'"
+              " AND subject LIKE ?";
+    }
+
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(c->db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
+
+    sqlite3_bind_text(stmt, 1, like_pat, -1, SQLITE_STATIC);
+    if (strcmp(field, "from") == 0)
+        sqlite3_bind_text(stmt, 2, like_pat, -1, SQLITE_STATIC);
+
+    size_t cap = 64, n = 0;
+    uint32_t *uids = malloc(cap * sizeof(uint32_t));
+    if (!uids) { sqlite3_finalize(stmt); return -1; }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (n >= cap) {
+            cap *= 2;
+            uint32_t *tmp = realloc(uids, cap * sizeof(uint32_t));
+            if (!tmp) { free(uids); sqlite3_finalize(stmt); return -1; }
+            uids = tmp;
+        }
+        uids[n++] = (uint32_t)sqlite3_column_int64(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    *out       = uids;
+    *out_count = n;
+    return 0;
 }
