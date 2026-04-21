@@ -57,6 +57,50 @@ Press `:` with a thread selected — the command bar pre-fills with the sender's
 
 ---
 
+## Use with tmux (stay in the terminal)
+
+The whole point. Run shellmail in a split pane alongside Claude Code, vim, or whatever you're working in — check email without touching the mouse or leaving the terminal.
+
+**Quick split:**
+
+```sh
+# New pane to the right with shellmail
+tmux split-window -h './shellmail'
+
+# Or below
+tmux split-window -v './shellmail'
+```
+
+**Switch between panes:** `Ctrl-b` then an arrow key (or `Ctrl-b o` to cycle).
+
+**Full setup — open shellmail in its own tmux window:**
+
+```sh
+tmux new-window -n mail './shellmail'
+```
+
+Switch to it with `` Ctrl-b ` `` (if you've named it) or `Ctrl-b n` / `Ctrl-b p`.
+
+**Recommended `.tmux.conf` binding:**
+
+```sh
+# Ctrl-b e — toggle shellmail pane
+bind e split-window -h -l 40% './shellmail'
+```
+
+With this, `Ctrl-b e` opens shellmail in a 40%-wide right pane. Press `q` to close it and return to your editor.
+
+**With screen:**
+
+```sh
+screen -S mail ./shellmail   # start in named session
+screen -r mail               # reattach from anywhere
+```
+
+Or use `Ctrl-a |` to split vertically inside an existing screen session, then `Ctrl-a tab` to switch focus and run `./shellmail` in the new region.
+
+---
+
 ## Build
 
 **Dependencies** (macOS via Homebrew):
