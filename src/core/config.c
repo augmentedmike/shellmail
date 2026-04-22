@@ -30,6 +30,12 @@ Config load_config(struct AppState *state, const char *filename) {
             strncpy(state->config.password, value, sizeof(state->config.password) - 1);
         } else if (strcmp(key, "archive_mailbox") == 0) {
             strncpy(state->config.archive_mailbox, value, sizeof(state->config.archive_mailbox) - 1);
+        } else if (strcmp(key, "caldav_url") == 0) {
+            strncpy(state->config.caldav_url, value, sizeof(state->config.caldav_url) - 1);
+        } else if (strcmp(key, "caldav_username") == 0) {
+            strncpy(state->config.caldav_username, value, sizeof(state->config.caldav_username) - 1);
+        } else if (strcmp(key, "caldav_password") == 0) {
+            strncpy(state->config.caldav_password, value, sizeof(state->config.caldav_password) - 1);
         }
     }
 
@@ -39,6 +45,14 @@ Config load_config(struct AppState *state, const char *filename) {
     if (!state->config.archive_mailbox[0])
         strncpy(state->config.archive_mailbox, "[Gmail]/All Mail",
                 sizeof(state->config.archive_mailbox) - 1);
+
+    // CalDAV credentials fall back to IMAP credentials if not specified
+    if (!state->config.caldav_username[0])
+        strncpy(state->config.caldav_username, state->config.username,
+                sizeof(state->config.caldav_username) - 1);
+    if (!state->config.caldav_password[0])
+        strncpy(state->config.caldav_password, state->config.password,
+                sizeof(state->config.caldav_password) - 1);
 
     return state->config;
 }

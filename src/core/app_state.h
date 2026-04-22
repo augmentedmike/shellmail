@@ -6,6 +6,7 @@
 #include "core/ui_state.h"
 #include "net/session.h"
 #include "core/message.h"
+#include "caldav/caldav.h"
 
 struct Cache;
 struct SyncContext;
@@ -24,6 +25,14 @@ typedef struct AppState {
     // Filtered view of thread_list (non-owning pointers)
     Thread     **view;
     size_t       view_count;
+
+    // Calendar
+    CalDavConn   caldav;
+    CalEventList cal_events;
+    int          cal_loaded;
+    int          cal_loaded_year;
+    int          cal_loaded_month;
+    char         cal_error[256];   // last fetch error, empty on success
 } AppState;
 
 extern _Atomic(AppState*) app_state;

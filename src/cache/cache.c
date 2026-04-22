@@ -4,6 +4,7 @@
 #include <time.h>
 #include <sqlite3.h>
 #include "cache/cache.h"
+#include "imap/imap.h"
 
 struct Cache {
     sqlite3 *db;
@@ -165,7 +166,11 @@ int cache_load_headers(Cache *c, MessageList *out) {
 
         if (date)    strncpy(h->date,         date,    sizeof(h->date)         - 1);
         if (subject) strncpy(h->subject,      subject, sizeof(h->subject)      - 1);
-        if (fname)   strncpy(h->from_name,    fname,   sizeof(h->from_name)    - 1);
+        if (fname) {
+            char decoded[128] = {0};
+            imap_decode_rfc2047(fname, decoded, sizeof(decoded));
+            strncpy(h->from_name, decoded, sizeof(h->from_name) - 1);
+        }
         if (faddr)   strncpy(h->from_address, faddr,   sizeof(h->from_address) - 1);
     }
     sqlite3_finalize(stmt);

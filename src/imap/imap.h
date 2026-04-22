@@ -20,6 +20,9 @@ typedef struct ImapConnection {
     int tag_counter;
 } ImapConnection;
 
+// RFC 2047 encoded-word decoder (also used by cache.c for stored names)
+void imap_decode_rfc2047(const char *in, char *out, size_t out_size);
+
 // TLS connect / disconnect (also used by sync.c and session.c)
 int  imap_tls_connect(ImapConnection *conn, const char *server, const char *port);
 void imap_tls_disconnect(ImapConnection *conn);

@@ -1,5 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
 #include "ui/ui.h"
 #include "imap/imap.h"
 #include "cache/cache.h"
@@ -172,15 +174,79 @@ void draw_reader(WINDOW *win, AppState *state) {
     if (scroll < 0) scroll = 0;
     state->ui_state.scroll_offset = scroll;
 
+    // Reset URL list for this render
+    state->ui_state.link_count = 0;
+
     for (int i = 0; i < body_rows && (scroll + i) < total; i++) {
         Line *ln = &lines[scroll + i];
         int len  = ln->len > cols - 1 ? cols - 1 : ln->len;
+        int row  = body_start + i;
+
         if (ln->is_header) {
             wattron(win, COLOR_PAIR(3) | A_BOLD);
-            mvwprintw(win, body_start + i, 0, "%.*s", len, ln->ptr);
+            mvwaddnstr(win, row, 0, ln->ptr, len);
             wattroff(win, COLOR_PAIR(3) | A_BOLD);
         } else {
-            mvwprintw(win, body_start + i, 0, "%.*s", len, ln->ptr);
+            // Render body line; detect http(s) URLs for highlighting + OSC 8
+            const char *p   = ln->ptr;
+            int remaining   = len;
+            int x           = 0;
+
+            while (remaining > 0) {
+                // Search for a URL prefix in the remaining segment
+                const char *url_s = NULL;
+                for (int si = 0; si < remaining - 6; si++) {
+                    if (strncmp(p + si, "https://", 8) == 0 ||
+                        strncmp(p + si, "http://",  7) == 0) {
+                        url_s = p + si;
+                        break;
+                    }
+                }
+
+                if (!url_s) {
+                    mvwaddnstr(win, row, x, p, remaining);
+                    break;
+                }
+
+                // Text before URL
+                int pre = (int)(url_s - p);
+                if (pre > 0) { mvwaddnstr(win, row, x, p, pre); x += pre; }
+
+                // Find end of URL (stop at whitespace or common terminators)
+                const char *url_e = url_s;
+                int url_budget = remaining - pre;
+                while (url_budget > 0 &&
+                       *url_e != ' '  && *url_e != '\t' && *url_e != '\n' &&
+                       *url_e != '"'  && *url_e != '<'  && *url_e != '>'  &&
+                       *url_e != ')'  && *url_e != ']'  && *url_e != '\'') {
+                    url_e++; url_budget--;
+                }
+
+                int url_full = (int)(url_e - url_s);
+                int url_vis  = url_full < (cols - 1 - x) ? url_full : (cols - 1 - x);
+                if (url_vis < 1) break;
+
+                wattron(win, A_UNDERLINE | COLOR_PAIR(2));
+                mvwaddnstr(win, row, x, url_s, url_vis);
+                wattroff(win, A_UNDERLINE | COLOR_PAIR(2));
+
+                // Record link for OSC 8 injection in ui_run
+                UIState *ui = &state->ui_state;
+                if (ui->link_count < MAX_SCREEN_LINKS) {
+                    ScreenLink *sl = &ui->links[ui->link_count++];
+                    sl->row = (short)row;
+                    sl->col = (short)x;
+                    sl->len = (short)url_vis;
+                    int ulen = url_full < (int)(sizeof(sl->url) - 1)
+                               ? url_full : (int)(sizeof(sl->url) - 1);
+                    memcpy(sl->url, url_s, ulen);
+                    sl->url[ulen] = '\0';
+                }
+
+                x         += url_vis;
+                remaining -= pre + url_full;
+                p          = url_e;
+            }
         }
     }
 

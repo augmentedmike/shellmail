@@ -5,3 +5,21 @@ smtp_port: 465
 username: you@gmail.com
 password: your-app-password
 # archive_mailbox: [Gmail]/All Mail   # default; change for non-Gmail servers
+
+# CalDAV calendar sync (optional — press Shift-C to open calendar view)
+# Credentials default to username/password above if not set.
+#
+# Google Calendar (use an App Password — apidata requires OAuth, use this URL):
+# caldav_url: https://www.google.com/calendar/dav/you@gmail.com/events/
+#
+# iCloud (use an App-Specific Password from appleid.apple.com):
+# caldav_url: https://caldav.icloud.com/
+#
+# Fastmail:
+# caldav_url: https://caldav.fastmail.com/dav/principals/user/you@fastmail.com/
+#
+# Generic / self-hosted (NextCloud, Radicale, DAViCal, etc.):
+# caldav_url: https://dav.example.com/caldav/you/calendar/
+#
+# caldav_username: you@example.com   # optional override
+# caldav_password: app-password      # optional override

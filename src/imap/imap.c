@@ -286,7 +286,7 @@ static int decode_encoded_word(const char *p, char *out, size_t out_size) {
 }
 
 // Decode all encoded-words in a header value into out.
-static void decode_rfc2047(const char *in, char *out, size_t out_size) {
+void imap_decode_rfc2047(const char *in, char *out, size_t out_size) {
     size_t j = 0;
     const char *p = in;
     while (*p && j < out_size - 1) {
@@ -484,10 +484,12 @@ int imap_fetch_headers(ImapConnection *conn, int start, int end, MessageList *li
                 parse_header_field(hdr_start, "From",    from_val,    sizeof(from_val));
                 parse_header_field(hdr_start, "Subject", raw_subject, sizeof(raw_subject));
                 parse_header_field(hdr_start, "Date",    raw_date,    sizeof(raw_date));
-                decode_rfc2047(raw_subject, h->subject, sizeof(h->subject));
+                imap_decode_rfc2047(raw_subject, h->subject, sizeof(h->subject));
                 format_date(raw_date, h->date, sizeof(h->date));
-                parse_from(from_val, h->from_name, sizeof(h->from_name),
-                                     h->from_address, sizeof(h->from_address));
+                char decoded_from[256] = {0};
+                imap_decode_rfc2047(from_val, decoded_from, sizeof(decoded_from));
+                parse_from(decoded_from, h->from_name, sizeof(h->from_name),
+                                         h->from_address, sizeof(h->from_address));
             }
         }
 

@@ -1,15 +1,21 @@
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <stdio.h>
 #include "ui/ui.h"
 #include "imap/imap.h"
 #include "sync/sync.h"
 #include "cache/cache.h"
 #include "core/message.h"
+#include "caldav/caldav.h"
 
 WINDOW *win_list;
 WINDOW *win_reader;
 WINDOW *win_composer;
 WINDOW *win_status;
+WINDOW *win_calendar;
+
+static void cal_load_month(AppState *state); // forward decl — defined after composer handler
 
 static void create_windows(void) {
     int rows, cols;
@@ -19,11 +25,13 @@ static void create_windows(void) {
     win_reader   = newwin(rows - 1, cols, 0, 0);
     win_composer = newwin(rows - 3, cols - 4, 1, 2);
     win_status   = newwin(1, cols, rows - 1, 0);
+    win_calendar = newwin(rows - 1, cols, 0, 0);
 
     keypad(win_list,     TRUE);
     keypad(win_reader,   TRUE);
     keypad(win_composer, TRUE);
     keypad(win_status,   TRUE);
+    keypad(win_calendar, TRUE);
 }
 
 static void destroy_windows(void) {
@@ -31,6 +39,7 @@ static void destroy_windows(void) {
     delwin(win_reader);
     delwin(win_composer);
     delwin(win_status);
+    delwin(win_calendar);
 }
 
 static void ui_init(void) {
@@ -141,6 +150,14 @@ static void handle_key_list(int ch, AppState *state) {
             reload_threads(state);
             break;
         }
+        case 'C':  // Shift-C — open calendar
+            ui->active_pane = PANE_CALENDAR;
+            if (!state->cal_loaded ||
+                    state->cal_loaded_year  != ui->cal_year ||
+                    state->cal_loaded_month != ui->cal_month) {
+                cal_load_month(state);
+            }
+            break;
         case ':': {
             // Pre-fill command bar with filter suggestion
             if (state->view_count > 0 && ui->selected_index >= 0 &&
@@ -187,6 +204,115 @@ static void handle_key_composer(int ch, AppState *state) {
         state->ui_state.active_pane = PANE_LIST;
 }
 
+// ============================================================================
+// Calendar helpers
+// ============================================================================
+
+static int cal_days_in_month(int year, int month) {
+    struct tm t = {0};
+    t.tm_year = year - 1900;
+    t.tm_mon  = month;  // 0-indexed, so this is next month
+    t.tm_mday = 0;      // day 0 = last day of current month
+    mktime(&t);
+    return t.tm_mday;
+}
+
+static void cal_load_month(AppState *state) {
+    UIState *ui = &state->ui_state;
+    if (!state->config.caldav_url[0]) return;
+
+    // Initialise CalDAV connection on first use
+    if (!state->caldav.server[0]) {
+        const char *user = state->config.caldav_username[0]
+            ? state->config.caldav_username : state->config.username;
+        const char *pass = state->config.caldav_password[0]
+            ? state->config.caldav_password : state->config.password;
+        caldav_init(&state->caldav, state->config.caldav_url, user, pass);
+    }
+
+    cal_event_list_free(&state->cal_events);
+    cal_event_list_init(&state->cal_events);
+    state->cal_loaded = 0;
+
+    // Show "Loading..." while the network request runs
+    draw_calendar(win_calendar, state);
+    draw_status(win_status, state);
+    doupdate();
+
+    int fetch_ret = caldav_fetch_month(&state->caldav, ui->cal_year, ui->cal_month,
+                                        &state->cal_events);
+    if (fetch_ret != 0) {
+        if (fetch_ret > 0)
+            snprintf(state->cal_error, sizeof(state->cal_error),
+                     "CalDAV error: HTTP %d", fetch_ret);
+        else
+            snprintf(state->cal_error, sizeof(state->cal_error),
+                     "CalDAV error: connection failed");
+    } else {
+        state->cal_error[0] = '\0';
+    }
+    state->cal_loaded       = 1;
+    state->cal_loaded_year  = ui->cal_year;
+    state->cal_loaded_month = ui->cal_month;
+}
+
+static void handle_key_calendar(int ch, AppState *state) {
+    UIState *ui  = &state->ui_state;
+    int      dim = cal_days_in_month(ui->cal_year, ui->cal_month);
+
+    switch (ch) {
+        case 'h': case KEY_LEFT:
+            if (--ui->cal_day < 1) {
+                if (--ui->cal_month < 1) { ui->cal_month = 12; ui->cal_year--; }
+                ui->cal_day = cal_days_in_month(ui->cal_year, ui->cal_month);
+                cal_load_month(state);
+            }
+            break;
+        case 'l': case KEY_RIGHT:
+            if (++ui->cal_day > dim) {
+                ui->cal_day = 1;
+                if (++ui->cal_month > 12) { ui->cal_month = 1; ui->cal_year++; }
+                cal_load_month(state);
+            }
+            break;
+        case 'k': case KEY_UP:
+            ui->cal_day -= 7;
+            if (ui->cal_day < 1) {
+                if (--ui->cal_month < 1) { ui->cal_month = 12; ui->cal_year--; }
+                ui->cal_day += cal_days_in_month(ui->cal_year, ui->cal_month);
+                cal_load_month(state);
+            }
+            break;
+        case 'j': case KEY_DOWN:
+            ui->cal_day += 7;
+            if (ui->cal_day > dim) {
+                ui->cal_day -= dim;
+                if (++ui->cal_month > 12) { ui->cal_month = 1; ui->cal_year++; }
+                cal_load_month(state);
+            }
+            break;
+        case '[':
+            if (--ui->cal_month < 1) { ui->cal_month = 12; ui->cal_year--; }
+            dim = cal_days_in_month(ui->cal_year, ui->cal_month);
+            if (ui->cal_day > dim) ui->cal_day = dim;
+            cal_load_month(state);
+            break;
+        case ']':
+            if (++ui->cal_month > 12) { ui->cal_month = 1; ui->cal_year++; }
+            dim = cal_days_in_month(ui->cal_year, ui->cal_month);
+            if (ui->cal_day > dim) ui->cal_day = dim;
+            cal_load_month(state);
+            break;
+        case 'R':
+            state->cal_loaded = 0; // force refetch
+            cal_load_month(state);
+            break;
+        case 27: // ESC
+            ui->active_pane = PANE_LIST;
+            break;
+    }
+}
+
 void ui_run(AppState *state) {
     ui_init();
     appstate_rebuild_view(state);
@@ -209,6 +335,22 @@ void ui_run(AppState *state) {
                 draw_reader(win_reader, state);
                 draw_status(win_status, state);
                 doupdate();
+                // Inject OSC 8 hyperlinks for URLs detected in draw_reader.
+                // Written as raw terminal sequences after ncurses flushes.
+                if (state->ui_state.link_count > 0) {
+                    UIState *ui = &state->ui_state;
+                    for (int li = 0; li < ui->link_count; li++) {
+                        ScreenLink *sl = &ui->links[li];
+                        // Position cursor, open OSC 8 link, write visible text, close.
+                        fprintf(stdout, "\033[%d;%dH\033]8;;%s\033\\%.*s\033]8;;\033\\",
+                                sl->row + 1, sl->col + 1,
+                                sl->url, (int)sl->len, sl->url);
+                    }
+                    fputs("\033[H", stdout);   // cursor to top-left
+                    fflush(stdout);
+                    // Force full redraw next frame so ncurses cursor tracking stays clean.
+                    clearok(win_reader, TRUE);
+                }
                 break;
             case PANE_COMPOSER:
                 draw_composer(win_composer, state);
@@ -220,16 +362,25 @@ void ui_run(AppState *state) {
                 draw_command(win_status, state);
                 doupdate();
                 break;
+            case PANE_CALENDAR:
+                draw_calendar(win_calendar, state);
+                draw_status(win_status, state);
+                doupdate();
+                break;
         }
 
         WINDOW *active_win = win_list;
         int     timeout_ms = 200;
 
-        if (state->ui_state.active_pane == PANE_READER)   active_win = win_reader;
-        if (state->ui_state.active_pane == PANE_COMPOSER) active_win = win_composer;
-        if (state->ui_state.active_pane == PANE_COMMAND) {
-            active_win = win_status;
-            timeout_ms = -1; // block while user types
+        switch (state->ui_state.active_pane) {
+            case PANE_READER:   active_win = win_reader;   break;
+            case PANE_COMPOSER: active_win = win_composer; break;
+            case PANE_CALENDAR: active_win = win_calendar; break;
+            case PANE_COMMAND:
+                active_win = win_status;
+                timeout_ms = -1; // block while user types
+                break;
+            default: break;
         }
 
         wtimeout(active_win, timeout_ms);
@@ -248,6 +399,7 @@ void ui_run(AppState *state) {
             case PANE_READER:   handle_key_reader(ch, state);   break;
             case PANE_COMPOSER: handle_key_composer(ch, state); break;
             case PANE_COMMAND:  handle_key_command(ch, state);  break;
+            case PANE_CALENDAR: handle_key_calendar(ch, state); break;
         }
     }
 

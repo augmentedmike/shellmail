@@ -8,6 +8,10 @@ typedef struct Config {
     char username[256];
     char password[128];
     char archive_mailbox[256];  // defaults to [Gmail]/All Mail
+    // CalDAV calendar sync (optional)
+    char caldav_url[512];      // full calendar collection URL
+    char caldav_username[256]; // defaults to username if empty
+    char caldav_password[128]; // defaults to password if empty
 } Config;
 
 struct AppState;

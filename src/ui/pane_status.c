@@ -22,7 +22,7 @@ void draw_status(WINDOW *win, AppState *state) {
     switch (state->ui_state.active_pane) {
         case PANE_LIST:
             mvwprintw(win, 0, 1,
-                "shellmail  |  j/k: navigate   Enter: open   A: archive   R: sync   c: compose   q: quit%s",
+                "shellmail  |  j/k: navigate   Enter: open   A: archive   R: sync   c: compose   C: calendar   q: quit%s",
                 sync_label);
             break;
         case PANE_READER:
@@ -36,6 +36,11 @@ void draw_status(WINDOW *win, AppState *state) {
             break;
         case PANE_COMMAND:
             break; // command bar renders its own status line
+        case PANE_CALENDAR:
+            mvwprintw(win, 0, 1,
+                "shellmail  |  h/l: day   j/k: week   [/]: month   R: refresh   Esc: back%s",
+                sync_label);
+            break;
     }
 
     wnoutrefresh(win);
