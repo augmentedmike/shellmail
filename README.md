@@ -26,8 +26,39 @@ No runtime. No VM. No framework. Starts in under a second.
 - **Mark all read** — `M` sends `STORE 1:* +FLAGS (\Seen)` to the server and updates the local cache
 - **TLS** — mbedTLS 4.x, no OpenSSL dependency
 - **Compose + reply** — SMTP send via TLS
+- **CalDAV calendar** — month grid with event details, `Shift-C` to open
+- **Clickable links** — URLs in emails are OSC 8 hyperlinks in supported terminals
 
 ![unread filter](docs/unread.png)
+
+---
+
+## CalDAV Calendar
+
+Press `Shift-C` from the inbox to open the calendar pane. It fetches events directly from any CalDAV server (Google Calendar, iCloud, Fastmail, etc.) and displays them alongside a month grid.
+
+![calendar view](docs/calendar.png)
+
+Days with events are marked with `*`. Navigate with the same vim-style keys as the inbox. Event details — time, location, and description — show below the grid for the selected day. Links in descriptions are clickable in supported terminals.
+
+**Config:**
+
+```yaml
+caldav_url: https://caldav.google.com/calendar/dav/you@gmail.com/events
+# caldav_username and caldav_password default to imap username/password if omitted
+```
+
+For Google Calendar, the URL format is `https://caldav.google.com/calendar/dav/YOUR_EMAIL/events`. Use an App Password.
+
+### Calendar keys
+
+| Key | Action |
+|-----|--------|
+| `h` / `l` | Previous / next day |
+| `j` / `k` | Back / forward one week |
+| `[` / `]` | Previous / next month |
+| `R` | Refresh events from server |
+| `Esc` | Back to inbox |
 
 ---
 
@@ -145,7 +176,8 @@ src/
   cache/      SQLite layer (headers, bodies, flags, filters)
   sync/       Background sync thread (pthread + cond var)
   core/       Message types, thread grouping, app state
-  ui/         ncurses panes (list, reader, composer, command bar)
+  ui/         ncurses panes (list, reader, composer, command bar, calendar)
+  caldav/     CalDAV client (RFC 4791, autodiscovery, iCal parser)
   net/        TLS session management (mbedTLS)
 ```
 
